@@ -46,7 +46,7 @@ public class KOManager {
     }
 
     public void setKO(final Player player) {
-        long durationSeconds = plugin.getConfig().getLong("knockout.duration_seconds", 30);
+        long durationSeconds = plugin.getConfig().getLong("knockout.duration_seconds", 180);
         setKO(player, (int) durationSeconds);
     }
 
@@ -649,10 +649,27 @@ public class KOManager {
             }
         }
 
-        // Item check
-        boolean requireItems = plugin.getConfig().getBoolean("self_revive.require_items", true);
+        // Item check. With the revive chain on, the price is the chain tier (one tier up) instead.
+        ReviveChainManager chain = ReanimateMC.getInstance().getReviveChainManager();
+        boolean useChain = chain.isEnabled();
+        boolean requireItems = !useChain && plugin.getConfig().getBoolean("self_revive.require_items", true);
         List<ItemStack> requiredItems = new ArrayList<>();
-        if (requireItems) {
+        if (useChain) {
+            ReviveChainManager.Cost cost = chain.getNextCost(player.getUniqueId(), true);
+            if (cost == null) {
+                player.sendMessage(ChatColor.RED + ReanimateMC.lang.get("revive_chain_no_selfrevive"));
+                return false;
+            }
+            if (!cost.isFree()) {
+                requireItems = true;
+                requiredItems.add(cost.toItemStack());
+                if (!player.getInventory().containsAtLeast(cost.toItemStack(), cost.amount())) {
+                    player.sendMessage(ChatColor.RED + ReanimateMC.lang.get("revive_chain_selfrevive_cost",
+                            "item", cost.describe()));
+                    return false;
+                }
+            }
+        } else if (requireItems) {
             List<java.util.Map<?, ?>> itemList = plugin.getConfig()
                     .getMapList("self_revive.required_items");
             for (java.util.Map<?, ?> entry : itemList) {
@@ -679,6 +696,7 @@ public class KOManager {
         final int[] elapsed = {0};
         final List<ItemStack> finalItems = requiredItems;
         final boolean requireFinal = requireItems;
+        final boolean countInChain = useChain;
 
         int taskId = Bukkit.getScheduler().scheduleSyncRepeatingTask(plugin, () -> {
             if (!isKO(player)) { cancelSelfRevive(player, false); return; }
@@ -689,7 +707,7 @@ public class KOManager {
                     "selfrevive_progress_bar", "bar", bar, "pct", String.valueOf(pct)));
 
             if (elapsed[0] >= totalTicks) {
-                completeSelfRevive(player, data, finalItems, requireFinal);
+                completeSelfRevive(player, data, finalItems, requireFinal, countInChain);
             }
         }, 0L, 1L);
 
@@ -720,18 +738,29 @@ public class KOManager {
     }
 
     private void completeSelfRevive(Player player, KOData data,
-                                     List<ItemStack> items, boolean consume) {
+                                     List<ItemStack> items, boolean consume, boolean countInChain) {
         cancelSelfRevive(player, false);
-        data.incrementSelfReviveUses();
 
         if (consume) {
+            for (ItemStack req : items) {
+                if (!player.getInventory().containsAtLeast(req, req.getAmount())) {
+                    player.sendMessage(ChatColor.RED + ReanimateMC.lang.get("selfrevive_missing_items",
+                            "item", req.getType().name().replace("_", " ").toLowerCase(),
+                            "amount", String.valueOf(req.getAmount())));
+                    return;
+                }
+            }
             for (ItemStack req : items) {
                 player.getInventory().removeItem(req);
             }
         }
+        data.incrementSelfReviveUses();
 
         // Revive the player
         revive(player, player);
+        if (countInChain) {
+            ReanimateMC.getInstance().getReviveChainManager().recordRevive(player.getUniqueId());
+        }
 
         // Post-revive effects (different from teammate revive — harsher)
         int nauseaSec  = plugin.getConfig().getInt("self_revive.effects_on_selfrevive.nausea", 10);

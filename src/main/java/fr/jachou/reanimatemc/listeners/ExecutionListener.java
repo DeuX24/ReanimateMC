@@ -30,6 +30,11 @@ public class ExecutionListener implements Listener {
 
         if (!koManager.isKO(victim))
             return;
+        // Nobody can hit or execute a player while they are being carried.
+        if (ReanimateMC.getInstance().getCarryManager().isCarried(victim)) {
+            event.setCancelled(true);
+            return;
+        }
         if (!ReanimateMC.getInstance().getConfig().getBoolean("execution.enabled"))
             return;
 

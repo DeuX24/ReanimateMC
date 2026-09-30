@@ -732,7 +732,7 @@ public class ConfigGUI implements Listener {
         cfg.set("execution.message_broadcast", true);
 
         cfg.set("knockout.enabled", true);
-        cfg.set("knockout.duration_seconds", 30);
+        cfg.set("knockout.duration_seconds", 180);
         cfg.set("knockout.movement_disabled", true);
         cfg.set("knockout.use_particles", true);
         cfg.set("knockout.heartbeat_sound", true);

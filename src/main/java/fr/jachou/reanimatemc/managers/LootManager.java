@@ -13,6 +13,8 @@ public class LootManager {
     private static final Map<UUID, UUID> looters = new HashMap<>();
 
     public static void startLoot(Player looter, Player target) {
+        // No looting a player while they are being carried.
+        if (fr.jachou.reanimatemc.ReanimateMC.getInstance().getCarryManager().isCarried(target)) return;
         Inventory inv = target.getInventory();
         looter.openInventory(inv);
         looters.put(looter.getUniqueId(), target.getUniqueId());

@@ -1,5 +1,7 @@
 package fr.jachou.reanimatemc.listeners;
 
+import fr.jachou.reanimatemc.ReanimateMC;
+
 import fr.jachou.reanimatemc.managers.KOManager;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -25,6 +27,10 @@ public class TotemListener implements Listener {
 
         Player player = event.getPlayer();
         if (!koManager.isKO(player)) {
+            return;
+        }
+        // With the revive chain on, a totem is only a revive payment, not a free instant self-revive.
+        if (ReanimateMC.getInstance().getReviveChainManager().isEnabled()) {
             return;
         }
 

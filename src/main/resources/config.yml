@@ -37,6 +37,37 @@ language: "en"
 first_run: true
 setup_completed: false
 
+# ─── Revive chain ────────────────────────────────────────────────────────────
+# Tiered revive costs. A chain is every revive a player gets while each one
+# comes within window_minutes of the previous one; every revive restarts the
+# window. Revive 1 of a chain costs the first entry, revive 2 the second, and
+# so on. Entries are "free" or "MATERIAL:amount", paid from the reviver's main
+# hand. Once all entries are used, the player is not downed any more and dies
+# normally until the window runs out. Dying does not reset the chain.
+# While enabled this replaces reanimation.require_special_item and the
+# self_revive item list, and right-clicking a totem no longer self-revives.
+revive_chain:
+  enabled: true
+  window_minutes: 15
+  costs:
+    - "free"
+    - "GOLDEN_APPLE:1"
+    - "GOLDEN_APPLE:4"
+    - "TOTEM_OF_UNDYING:1"
+  # A self-revive costs this many tiers higher (paid from the inventory).
+  # With 1: a self-revive as revive 2 costs 4 golden apples, as revive 3 a
+  # totem, and is not possible as revive 4.
+  self_revive_tier_offset: 1
+
+# ─── Carry ───────────────────────────────────────────────────────────────────
+# Right-click a downed player (without crouching) to carry them; crouch to put
+# them down. Crouch + right-click still revives. Carried players can't be hit,
+# executed or looted. Needs the reanimatemc.carry permission (default: everyone).
+carry:
+  enabled: true
+  # Slowness level for the carrier while carrying (0 = not slowed).
+  carrier_slowness_level: 1
+
 # ─────────────────────────────────────────────────────────────────────────────
 # REVIVAL SYSTEM
 # Controls how players revive K.O.'d teammates manually (crouching near them).
@@ -61,7 +92,7 @@ knockout:
   # Enable or disable the entire K.O. system. If false, players die normally.
   enabled: true
   # How many seconds a player has to be revived before dying from K.O.
-  duration_seconds: 30
+  duration_seconds: 180
   # Prevent all movement while K.O.'d (overridden by prone.allow_crawl).
   movement_disabled: true
   # Show particle effects around K.O.'d players.

@@ -3,6 +3,7 @@ package fr.jachou.reanimatemc.listeners;
 import fr.jachou.reanimatemc.ReanimateMC;
 import fr.jachou.reanimatemc.managers.KOManager;
 import fr.jachou.reanimatemc.managers.LootManager;
+import fr.jachou.reanimatemc.managers.ReviveChainManager;
 import fr.jachou.reanimatemc.utils.Utils;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -54,9 +55,11 @@ public class ReanimationListener implements Listener {
         // Only interact with KO players
         if (!koManager.isKO(target)) return;
 
-        // Must be sneaking
+        // Must be sneaking. A plain right-click picks the player up instead when carrying is on.
         if (!reviver.isSneaking()) {
-            reviver.sendMessage(ChatColor.RED + ReanimateMC.lang.get("not_sneaking"));
+            if (!ReanimateMC.getInstance().getCarryManager().isEnabled()) {
+                reviver.sendMessage(ChatColor.RED + ReanimateMC.lang.get("not_sneaking"));
+            }
             return;
         }
 
@@ -66,30 +69,50 @@ public class ReanimationListener implements Listener {
             return;
         }
 
-        // Check required item (if configured)
-        boolean requireSpecial = ReanimateMC.getInstance().getConfig()
-                .getBoolean("reanimation.require_special_item", true);
-        String requiredItemName = ReanimateMC.getInstance().getConfig()
-                .getString("reanimation.required_item", "GOLDEN_APPLE");
-        ItemStack inHand = reviver.getInventory().getItemInMainHand();
-
-        if (requireSpecial) {
-            if (inHand == null || !inHand.getType().toString().equalsIgnoreCase(requiredItemName)) {
+        // Work out what this revive costs: the revive chain tier, or the classic single item.
+        ReviveChainManager chain = ReanimateMC.getInstance().getReviveChainManager();
+        Material costMaterial = null;
+        int costAmount = 0;
+        if (chain.isEnabled()) {
+            ReviveChainManager.Cost cost = chain.getNextCost(target.getUniqueId(), false);
+            if (cost == null) {
                 reviver.sendMessage(ChatColor.RED +
-                        ReanimateMC.lang.get("special_item_required", "item", requiredItemName));
+                        ReanimateMC.lang.get("revive_chain_exhausted", "player", target.getName()));
                 return;
+            }
+            if (!ReviveChainManager.hasInMainHand(reviver, cost)) {
+                reviver.sendMessage(ChatColor.RED +
+                        ReanimateMC.lang.get("revive_chain_cost", "player", target.getName(), "item", cost.describe()));
+                return;
+            }
+            if (!cost.isFree()) {
+                costMaterial = cost.material();
+                costAmount = cost.amount();
+            }
+        } else {
+            boolean requireSpecial = ReanimateMC.getInstance().getConfig()
+                    .getBoolean("reanimation.require_special_item", true);
+            String requiredItemName = ReanimateMC.getInstance().getConfig()
+                    .getString("reanimation.required_item", "GOLDEN_APPLE");
+            ItemStack inHand = reviver.getInventory().getItemInMainHand();
+            if (requireSpecial) {
+                if (inHand == null || !inHand.getType().toString().equalsIgnoreCase(requiredItemName)) {
+                    reviver.sendMessage(ChatColor.RED +
+                            ReanimateMC.lang.get("special_item_required", "item", requiredItemName));
+                    return;
+                }
+                costMaterial = inHand.getType();
+                costAmount = 1;
             }
         }
 
         // All preliminary checks passed. Begin the holding process.
         int durationTicks = ReanimateMC.getInstance().getConfig()
                 .getInt("reanimation.duration_ticks", 100);
-        // Capture the stack in hand now; we will consume one at the end if successful
-        ItemStack requiredStack = requireSpecial ? inHand.clone() : null;
 
         // We also need to remember the reviver and target for each tick
-        StartReviveTask task = new StartReviveTask(reviver, target, requiredItemName, requiredStack,
-                durationTicks);
+        StartReviveTask task = new StartReviveTask(reviver, target, costMaterial, costAmount,
+                chain.isEnabled(), durationTicks);
         BukkitTask bukkitTask = Bukkit.getScheduler().runTaskTimer(
                 ReanimateMC.getInstance(),
                 task,
@@ -112,17 +135,20 @@ public class ReanimationListener implements Listener {
     private class StartReviveTask implements Runnable {
         private final Player reviver;
         private final Player target;
-        private final String requiredItemName;
-        private final ItemStack requiredStack; // clone of original stack to compare type
+        private final Material costMaterial; // null when the revive is free
+        private final int costAmount;
+        private final boolean countInChain;
         private final int totalTicks;
         private int ticksElapsed = 0;
         private BukkitTask taskRef;
 
-        StartReviveTask(Player reviver, Player target, String requiredItemName, ItemStack requiredStack, int totalTicks) {
+        StartReviveTask(Player reviver, Player target, Material costMaterial, int costAmount,
+                        boolean countInChain, int totalTicks) {
             this.reviver = reviver;
             this.target = target;
-            this.requiredItemName = requiredItemName;
-            this.requiredStack = requiredStack;
+            this.costMaterial = costMaterial;
+            this.costAmount = costAmount;
+            this.countInChain = countInChain;
             this.totalTicks = totalTicks;
         }
 
@@ -155,9 +181,9 @@ public class ReanimationListener implements Listener {
                     return;
                 }
             }
-            if (requiredStack != null) {
+            if (costMaterial != null) {
                 ItemStack current = reviver.getInventory().getItemInMainHand();
-                if (current == null || !current.getType().toString().equalsIgnoreCase(requiredItemName)) {
+                if (current == null || current.getType() != costMaterial || current.getAmount() < costAmount) {
                     cancelRevive("Revival canceled: you no longer hold the required item.");
                     return;
                 }
@@ -181,19 +207,15 @@ public class ReanimationListener implements Listener {
                     ChatColor.YELLOW + "Reviving... " + percent + "%");
 
             if (ticksElapsed >= totalTicks) {
-                if (requiredStack != null) {
-                    ItemStack inHandNow = reviver.getInventory().getItemInMainHand();
-                    if (inHandNow != null && inHandNow.getType().toString().equalsIgnoreCase(requiredItemName)) {
-                        int newAmount = inHandNow.getAmount() - 1;
-                        if (newAmount <= 0) {
-                            reviver.getInventory().setItemInMainHand(null);
-                        } else {
-                            inHandNow.setAmount(newAmount);
-                            reviver.getInventory().setItemInMainHand(inHandNow);
-                        }
-                    }
+                if (costMaterial != null && !ReviveChainManager.takeFromMainHand(reviver,
+                        new ReviveChainManager.Cost(costMaterial, costAmount))) {
+                    cancelRevive("Revival canceled: you no longer hold the required item.");
+                    return;
                 }
                 koManager.revive(target, reviver);
+                if (countInChain) {
+                    ReanimateMC.getInstance().getReviveChainManager().recordRevive(target.getUniqueId());
+                }
                 target.sendMessage(ChatColor.GREEN +
                         ReanimateMC.lang.get("revived_by", "player", reviver.getName()));
                 reviver.sendMessage(ChatColor.GREEN +

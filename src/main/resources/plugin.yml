@@ -29,6 +29,9 @@ permissions:
   reanimatemc.revive:
     description: Allows reviving a KO'd player
     default: true
+  reanimatemc.carry:
+    description: Allows picking up and carrying KO'd players
+    default: true
   reanimatemc.execute:
     description: Allows executing a KO'd player
     default: true

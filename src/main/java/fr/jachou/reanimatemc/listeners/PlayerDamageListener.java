@@ -3,7 +3,9 @@ package fr.jachou.reanimatemc.listeners;
 import fr.jachou.reanimatemc.ReanimateMC;
 import fr.jachou.reanimatemc.managers.KOManager;
 import fr.jachou.reanimatemc.managers.NPCSummonManager;
+import fr.jachou.reanimatemc.managers.ReviveChainManager;
 import fr.jachou.reanimatemc.utils.Utils;
+import org.bukkit.ChatColor;
 import org.bukkit.Color;
 import org.bukkit.Material;
 import org.bukkit.Particle;
@@ -80,6 +82,13 @@ public class PlayerDamageListener implements Listener {
         if (finalDamage >= currentHealth) {
             if (player.getInventory().getItemInMainHand().getType()  == Material.TOTEM_OF_UNDYING ||
                 player.getInventory().getItemInOffHand().getType()   == Material.TOTEM_OF_UNDYING) {
+                return;
+            }
+
+            // Every revive in the current chain is used up: no downed state, the hit kills normally.
+            ReviveChainManager chain = ReanimateMC.getInstance().getReviveChainManager();
+            if (!koManager.isKO(player) && chain.isEnabled() && chain.isExhausted(player.getUniqueId())) {
+                player.sendMessage(ChatColor.RED + ReanimateMC.lang.get("revive_chain_no_revives_left"));
                 return;
             }
 

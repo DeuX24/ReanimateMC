@@ -599,12 +599,28 @@ public class NPCSummonManager {
             return false;
         }
 
-        boolean requireItem = plugin.getConfig().getBoolean("reanimation.require_special_item", true);
-        String requiredItem = plugin.getConfig().getString("reanimation.required_item", "GOLDEN_APPLE");
-        org.bukkit.inventory.ItemStack inHand = caller.getInventory().getItemInMainHand();
-        if (requireItem && (inHand == null || !inHand.getType().toString().equalsIgnoreCase(requiredItem))) {
-            caller.sendMessage(ChatColor.RED + ReanimateMC.lang.get("special_item_required", "item", requiredItem));
-            return false;
+        ReviveChainManager chain = ReanimateMC.getInstance().getReviveChainManager();
+        ReviveChainManager.Cost cost = null;
+        if (chain.isEnabled()) {
+            cost = chain.getNextCost(target.getUniqueId(), false);
+            if (cost == null) {
+                caller.sendMessage(ChatColor.RED + ReanimateMC.lang.get("revive_chain_exhausted", "player", target.getName()));
+                return false;
+            }
+            if (!ReviveChainManager.hasInMainHand(caller, cost)) {
+                caller.sendMessage(ChatColor.RED + ReanimateMC.lang.get("revive_chain_cost",
+                        "player", target.getName(), "item", cost.describe()));
+                return false;
+            }
+        } else {
+            boolean requireItem = plugin.getConfig().getBoolean("reanimation.require_special_item", true);
+            String requiredItem = plugin.getConfig().getString("reanimation.required_item", "GOLDEN_APPLE");
+            org.bukkit.inventory.ItemStack inHand = caller.getInventory().getItemInMainHand();
+            if (requireItem && (inHand == null || !inHand.getType().toString().equalsIgnoreCase(requiredItem))) {
+                caller.sendMessage(ChatColor.RED + ReanimateMC.lang.get("special_item_required", "item", requiredItem));
+                return false;
+            }
+            if (requireItem) cost = new ReviveChainManager.Cost(inHand.getType(), 1);
         }
 
         // Teleport healer to target
@@ -614,7 +630,7 @@ public class NPCSummonManager {
         target.sendMessage(ChatColor.GOLD + ReanimateMC.lang.get("npc_reviving_you",
                 "player", caller.getName(), "type", healer.getType().getDisplayName()));
 
-        startTimedRevive(healer, target, caller, requireItem ? inHand : null);
+        startTimedRevive(healer, target, caller, cost);
         caller.sendMessage(ChatColor.GREEN + ReanimateMC.lang.get("revive_start"));
         return true;
     }
@@ -638,6 +654,12 @@ public class NPCSummonManager {
     private void performRevive(ReanimatorNPC npc, Player target, Player reviver) {
         // If already reviving this target, skip
         if (reviveInProgress.containsKey(npc.getId())) return;
+        // Automatic NPC revives have nobody to pay, so they only happen when the chain tier is free.
+        ReviveChainManager chain = ReanimateMC.getInstance().getReviveChainManager();
+        if (chain.isEnabled()) {
+            ReviveChainManager.Cost cost = chain.getNextCost(target.getUniqueId(), false);
+            if (cost == null || !cost.isFree()) return;
+        }
         startTimedRevive(npc, target, reviver, null);
     }
 
@@ -648,7 +670,7 @@ public class NPCSummonManager {
      * On completion calls {@link KOManager#revive} and fires behavior callback.
      */
     private void startTimedRevive(ReanimatorNPC npc, Player target, Player reviver,
-                                   org.bukkit.inventory.ItemStack itemToConsume) {
+                                   ReviveChainManager.Cost itemToConsume) {
         reviveInProgress.put(npc.getId(), target.getUniqueId());
 
         int totalTicks = (int) cfg(npc, "revive_duration_ticks", 100.0);
@@ -680,15 +702,18 @@ public class NPCSummonManager {
             // Completion
             if (elapsed[0] >= totalTicks) {
                 cancelReviveTask(npc);
-                if (itemToConsume != null && reviver.isOnline()) {
-                    org.bukkit.inventory.ItemStack current = reviver.getInventory().getItemInMainHand();
-                    if (current != null && current.getType() == itemToConsume.getType()) {
-                        int newAmt = current.getAmount() - 1;
-                        reviver.getInventory().setItemInMainHand(newAmt <= 0 ? null : current);
-                        if (newAmt > 0) current.setAmount(newAmt);
+                if (itemToConsume != null && !itemToConsume.isFree()
+                        && (!reviver.isOnline() || !ReviveChainManager.takeFromMainHand(reviver, itemToConsume))) {
+                    if (reviver.isOnline()) {
+                        reviver.sendMessage(ChatColor.RED + ReanimateMC.lang.get("revive_chain_cost",
+                                "player", target.getName(), "item", itemToConsume.describe()));
                     }
+                    return;
                 }
                 koManager.revive(target, reviver);
+                if (ReanimateMC.getInstance().getReviveChainManager().isEnabled()) {
+                    ReanimateMC.getInstance().getReviveChainManager().recordRevive(target.getUniqueId());
+                }
                 target.getWorld().spawnParticle(Particle.HEART, target.getLocation().add(0, 2, 0), 10, 0.5, 0.5, 0.5);
                 target.getWorld().playSound(target.getLocation(), Sound.BLOCK_ENCHANTMENT_TABLE_USE, 1.0f, 1.5f);
                 behaviors.get(npc.getType()).onRevive(npc, target, reviver);

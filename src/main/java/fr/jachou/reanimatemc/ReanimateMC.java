@@ -16,8 +16,10 @@ import fr.jachou.reanimatemc.hooks.VaultHook;
 import fr.jachou.reanimatemc.listeners.*;
 import fr.jachou.reanimatemc.listeners.NPCDamageListener;
 import fr.jachou.reanimatemc.listeners.SetupReminderListener;
+import fr.jachou.reanimatemc.managers.CarryManager;
 import fr.jachou.reanimatemc.managers.KOManager;
 import fr.jachou.reanimatemc.managers.NPCSummonManager;
+import fr.jachou.reanimatemc.managers.ReviveChainManager;
 import fr.jachou.reanimatemc.managers.StatsManager;
 import fr.jachou.reanimatemc.utils.Lang;
 import fr.jachou.reanimatemc.utils.updater.UpdateChecker;
@@ -38,6 +40,8 @@ public final class ReanimateMC extends JavaPlugin {
     private KOManager koManager;
     private StatsManager statsManager;
     private NPCSummonManager npcSummonManager;
+    private ReviveChainManager reviveChainManager;
+    private CarryManager carryManager;
     private VaultHook vault;
     public static Lang lang;
     private ConfigGUI configGui;
@@ -72,6 +76,10 @@ public final class ReanimateMC extends JavaPlugin {
         // Initialisation du gestionnaire des états K.O.
         koManager = new KOManager(this);
 
+        // Tiered revive costs and carrying downed players
+        reviveChainManager = new ReviveChainManager(this);
+        carryManager = new CarryManager(this, koManager);
+
         // Vault hook (soft dependency)
         vault = new VaultHook(this);
 
@@ -97,6 +105,7 @@ public final class ReanimateMC extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new LootListener(), this);
         getServer().getPluginManager().registerEvents(new PlayerKOListener(koManager), this);
         getServer().getPluginManager().registerEvents(new TotemListener(koManager), this);
+        getServer().getPluginManager().registerEvents(new CarryListener(carryManager, koManager), this);
         getServer().getPluginManager().registerEvents(new PlayerConnectionListener(koManager), this);
         getServer().getPluginManager().registerEvents(new GolemManager(), this);
 
@@ -154,6 +163,9 @@ public final class ReanimateMC extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (carryManager != null) carryManager.releaseAll();
+        if (reviveChainManager != null) reviveChainManager.save();
+
         // Annulation de toutes les tâches programmées relatives aux joueurs en K.O.
         koManager.cancelAllTasks();
         
@@ -170,6 +182,14 @@ public final class ReanimateMC extends JavaPlugin {
         }
 
         Bukkit.getConsoleSender().sendMessage("ReanimateMC has been disabled.");
+    }
+
+    public ReviveChainManager getReviveChainManager() {
+        return reviveChainManager;
+    }
+
+    public CarryManager getCarryManager() {
+        return carryManager;
     }
 
     public KOManager getKoManager() {

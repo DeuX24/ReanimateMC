@@ -153,6 +153,8 @@ public class PlayerKOListener implements Listener {
     public void onPlayerMove(PlayerMoveEvent event) {
         Player player = event.getPlayer();
         if (!koManager.isKO(player)) return;
+        // Being carried: the carrier moves them, don't pin them in place.
+        if (ReanimateMC.getInstance().getCarryManager().isCarried(player)) return;
         KOData data = koManager.getKOData(player);
 
         org.bukkit.Location from = event.getFrom();

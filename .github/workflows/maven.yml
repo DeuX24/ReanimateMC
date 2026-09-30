@@ -10,9 +10,8 @@ name: Java CI with Maven
 
 on:
   push:
-    branches: [ "master" ]
   pull_request:
-    branches: [ "master" ]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -29,6 +28,9 @@ jobs:
         cache: maven
     - name: Build with Maven
       run: mvn -B package --file pom.xml
-    - name: Download a Build Artifact
-      uses: actions/download-artifact@v4.3.0
+    - name: Upload plugin jar
+      uses: actions/upload-artifact@v4
+      with:
+        name: ReanimateMC
+        path: target/ReanimateMC-*.jar
 
