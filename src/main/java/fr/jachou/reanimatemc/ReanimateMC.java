@@ -22,8 +22,6 @@ import fr.jachou.reanimatemc.managers.NPCSummonManager;
 import fr.jachou.reanimatemc.managers.ReviveChainManager;
 import fr.jachou.reanimatemc.managers.StatsManager;
 import fr.jachou.reanimatemc.utils.Lang;
-import fr.jachou.reanimatemc.utils.updater.UpdateChecker;
-import fr.jachou.reanimatemc.utils.updater.UpdateNotifier;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
@@ -45,7 +43,6 @@ public final class ReanimateMC extends JavaPlugin {
     private VaultHook vault;
     public static Lang lang;
     private ConfigGUI configGui;
-    private UpdateNotifier notifier;
 
     public StatsManager getStatsManager() {
         return statsManager;
@@ -138,17 +135,6 @@ public final class ReanimateMC extends JavaPlugin {
 
         Bukkit.getConsoleSender().sendMessage("ReanimateMC running on version " + getDescription().getVersion() + "!");
 
-        notifier = new UpdateNotifier(new UpdateChecker(Bukkit.getServer().getVersion()));
-
-        new BukkitRunnable() {
-            @Override public void run() { notifier.notifyIfOutdated(); }
-        }.runTaskAsynchronously(this);
-
-        long periodTicks = 12L * 60L * 60L * 20L;
-        new BukkitRunnable() {
-            @Override public void run() { notifier.notifyIfOutdated(); }
-        }.runTaskTimerAsynchronously(this, periodTicks, periodTicks);
-
         if (!getConfig().getBoolean("setup_completed", false)) {
             Bukkit.getScheduler().runTaskLater(this, () -> {
                 for (Player p : Bukkit.getOnlinePlayers()) {
@@ -197,9 +183,6 @@ public final class ReanimateMC extends JavaPlugin {
         return koManager;
     }
 
-    public UpdateNotifier getNotifier() {
-        return notifier;
-    }
 
     public NPCSummonManager getNpcSummonManager() {
         return npcSummonManager;
