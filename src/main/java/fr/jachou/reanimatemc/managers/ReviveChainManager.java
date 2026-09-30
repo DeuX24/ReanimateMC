@@ -123,6 +123,15 @@ public class ReviveChainManager {
         return costs.get(index);
     }
 
+    /** How many revives a chain allows in total. */
+    public int getMaxRevives() {
+        return costs().size();
+    }
+
+    public long getWindowMinutes() {
+        return plugin.getConfig().getLong("revive_chain.window_minutes", 15);
+    }
+
     /** True when not even a teammate can revive the player, so they should die instead of going down. */
     public boolean isExhausted(UUID uuid) {
         return getNextCost(uuid, false) == null;

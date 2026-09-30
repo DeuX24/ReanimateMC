@@ -100,7 +100,7 @@ knockout:
   # Play a heartbeat sound while K.O.'d.
   heartbeat_sound: true
   # Apply blindness effect while K.O.'d.
-  blindness: true
+  blindness: false
   # How many seconds the player must hold sneak to surrender (die voluntarily).
   suicide_hold_seconds: 3
   # Weakness effect level while K.O.'d (1 = Weakness I, 2 = Weakness II, etc.).
@@ -152,9 +152,14 @@ knockout:
 # EXECUTION SYSTEM
 # ─────────────────────────────────────────────────────────────────────────────
 execution:
-  # Allow players to permanently execute K.O.'d players by holding left-click.
+  # Allow players to permanently execute K.O.'d players by hitting them repeatedly.
   enabled: true
-  # How long to hold left-click to execute (in ticks, 40 = 2 seconds).
+  # Hits needed to execute. A single stray click never executes anyone.
+  hits_required: 3
+  # All the hits must land within this many seconds of the first one,
+  # otherwise the count starts over.
+  hit_window_seconds: 2.0
+  # Unused since executions count hits; kept for older configs.
   hold_duration_ticks: 40
   # Broadcast a message to all players when someone is executed.
   message_broadcast: true

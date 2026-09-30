@@ -2,6 +2,7 @@ package fr.jachou.reanimatemc.listeners;
 
 import fr.jachou.reanimatemc.ReanimateMC;
 import fr.jachou.reanimatemc.managers.KOManager;
+import fr.jachou.reanimatemc.utils.Utils;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -14,7 +15,7 @@ import java.util.UUID;
 
 public class ExecutionListener implements Listener {
     private final KOManager koManager;
-    private final Map<UUID, UUID> pendingExecutions = new HashMap<>(); // victim -> executioner
+    private final Map<UUID, Attempt> attempts = new HashMap<>(); // victim -> current execution attempt
 
     public ExecutionListener(KOManager koManager) {
         this.koManager = koManager;
@@ -40,23 +41,48 @@ public class ExecutionListener implements Listener {
 
         event.setCancelled(true);
 
-        // If another player is already executing this victim, block the new attempt
-        UUID currentExecutioner = pendingExecutions.get(victim.getUniqueId());
-        if (currentExecutioner != null && !currentExecutioner.equals(damager.getUniqueId())) {
+        if (!damager.hasPermission("reanimatemc.execute")) return;
+
+        // Execution takes several hits in a row, so a single stray click never kills anyone.
+        int required = Math.max(1, ReanimateMC.getInstance().getConfig().getInt("execution.hits_required", 3));
+        long windowMs = (long) (ReanimateMC.getInstance().getConfig().getDouble("execution.hit_window_seconds", 2.0) * 1000);
+        long now = System.currentTimeMillis();
+
+        Attempt attempt = attempts.get(victim.getUniqueId());
+        if (attempt != null && now - attempt.firstHit > windowMs) {
+            attempts.remove(victim.getUniqueId());
+            attempt = null;
+        }
+        if (attempt != null && !attempt.executioner.equals(damager.getUniqueId())) {
             damager.sendMessage(ChatColor.RED + ReanimateMC.lang.get("execution_in_progress"));
             return;
         }
+        if (attempt == null) {
+            attempt = new Attempt(damager.getUniqueId(), now);
+            attempts.put(victim.getUniqueId(), attempt);
+        }
+        attempt.hits++;
 
-        damager.sendMessage(ChatColor.RED + ReanimateMC.lang.get("execution_in_progress"));
-        int holdDuration = ReanimateMC.getInstance().getConfig().getInt("execution.hold_duration_ticks", 40);
+        if (attempt.hits >= required) {
+            attempts.remove(victim.getUniqueId());
+            // Run after this damage event finishes: killing the player inside it makes them die twice.
+            org.bukkit.Bukkit.getScheduler().runTask(ReanimateMC.getInstance(), () -> {
+                if (koManager.isKO(victim)) koManager.execute(victim);
+            });
+            return;
+        }
+        Utils.sendActionBar(damager, ChatColor.RED + ReanimateMC.lang.get("execution_progress",
+                "player", victim.getName(), "hits", String.valueOf(attempt.hits), "required", String.valueOf(required)));
+    }
 
-        pendingExecutions.put(victim.getUniqueId(), damager.getUniqueId());
+    private static final class Attempt {
+        final UUID executioner;
+        final long firstHit;
+        int hits;
 
-        ReanimateMC.getInstance().getServer().getScheduler().runTaskLater(ReanimateMC.getInstance(), () -> {
-            pendingExecutions.remove(victim.getUniqueId());
-            if (koManager.isKO(victim)) {
-                koManager.execute(victim);
-            }
-        }, holdDuration);
+        Attempt(UUID executioner, long firstHit) {
+            this.executioner = executioner;
+            this.firstHit = firstHit;
+        }
     }
 }

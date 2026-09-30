@@ -99,6 +99,21 @@ public class KOManager {
 
         // Envoi de l'Action Bar
         AtomicInteger secondsLeft = new AtomicInteger((int) durationSeconds);
+        final String countdownKey;
+        final String[] countdownArgs;
+        String selfReviveCost = selfReviveHint(player);
+        // Shown on the floating label so teammates see what a revive costs before they try.
+        final String labelSuffix = reviveCostLabel(player);
+        if (selfReviveCost == null) {
+            countdownKey = "actionbar_ko_countdown";
+            countdownArgs = new String[0];
+        } else if (selfReviveCost.isEmpty()) {
+            countdownKey = "actionbar_ko_countdown_no_selfrevive";
+            countdownArgs = new String[0];
+        } else {
+            countdownKey = "actionbar_ko_countdown_selfrevive";
+            countdownArgs = new String[]{"item", selfReviveCost};
+        }
 
         // Tâche répétitive pour le countdown
         ArmorStand label = (ArmorStand) player.getWorld().spawnEntity(player.getLocation().add(0, 2.1, 0), EntityType.ARMOR_STAND);
@@ -110,10 +125,12 @@ public class KOManager {
         int barTaskId = Bukkit.getScheduler().scheduleSyncRepeatingTask(plugin, () -> {
             int sec = secondsLeft.getAndDecrement();
             if (sec >= 0 && koPlayers.containsKey(player.getUniqueId())) {
-                Utils.sendActionBar(player,
-                        ReanimateMC.lang.get("actionbar_ko_countdown", "time", String.valueOf(sec))
-                );
-                label.setCustomName(ChatColor.RED + "KO - " + sec + "s");
+                String[] args = new String[countdownArgs.length + 2];
+                args[0] = "time";
+                args[1] = String.valueOf(sec);
+                System.arraycopy(countdownArgs, 0, args, 2, countdownArgs.length);
+                Utils.sendActionBar(player, ReanimateMC.lang.get(countdownKey, args));
+                label.setCustomName(ChatColor.RED + "KO - " + sec + "s" + labelSuffix);
                 label.teleport(player.getLocation().add(0, 2.1, 0));
             } else {
                 label.remove();
@@ -175,7 +192,7 @@ public class KOManager {
             }
         }, 20L, 20L);
         data.setEffectEnforcerId(enforcerId);
-        boolean blind = plugin.getConfig().getBoolean("knockout.blindness", true);
+        boolean blind = plugin.getConfig().getBoolean("knockout.blindness", false);
         if (plugin.getConfig().getBoolean("prone.enabled", false)) {
             boolean allowCrawl = plugin.getConfig().getBoolean("prone.allow_crawl", false);
             if (data.isCrawling() && allowCrawl) {
@@ -213,6 +230,7 @@ public class KOManager {
         data.setMount(null);
 
         player.sendMessage(ChatColor.RED + ReanimateMC.lang.get("ko_set"));
+        sendReviveChainInfo(player);
 
         ReanimateMC.getInstance().getStatsManager().addKnockout();
     }
@@ -251,6 +269,46 @@ public class KOManager {
         seat.setInvulnerable(true);
         seat.setMarker(true);
         return seat;
+    }
+
+    /**
+     * The self-revive price shown next to the K.O. countdown: {@code null} when there is
+     * nothing to show (revive chain off, self-revive off or not permitted), an empty string
+     * when self-revive isn't possible for this revive, otherwise the price.
+     */
+    private String selfReviveHint(Player player) {
+        ReviveChainManager chain = ReanimateMC.getInstance().getReviveChainManager();
+        if (!chain.isEnabled()) return null;
+        if (!plugin.getConfig().getBoolean("self_revive.enabled", true)) return null;
+        if (!player.hasPermission("reanimatemc.selfrevive")) return null;
+        ReviveChainManager.Cost cost = chain.getNextCost(player.getUniqueId(), true);
+        if (cost == null) return "";
+        return cost.describe();
+    }
+
+    /** " | Revive: <cost>" for the floating K.O. label, or empty when the revive chain is off. */
+    private String reviveCostLabel(Player player) {
+        ReviveChainManager chain = ReanimateMC.getInstance().getReviveChainManager();
+        if (!chain.isEnabled()) return "";
+        ReviveChainManager.Cost cost = chain.getNextCost(player.getUniqueId(), false);
+        if (cost == null) return "";
+        return ChatColor.GRAY + " | " + ChatColor.GOLD
+                + ReanimateMC.lang.get("label_revive_cost", "item", cost.describe());
+    }
+
+    /** Tells a player who just went down which revive this is and what a teammate must pay. */
+    private void sendReviveChainInfo(Player player) {
+        ReviveChainManager chain = ReanimateMC.getInstance().getReviveChainManager();
+        if (!chain.isEnabled()) return;
+        if (chain.getNextCost(player.getUniqueId(), false) == null) return;
+        int number = chain.getChainCount(player.getUniqueId()) + 1;
+        int max = chain.getMaxRevives();
+        player.sendMessage(ChatColor.YELLOW + ReanimateMC.lang.get("revive_chain_downed_info",
+                "number", String.valueOf(number), "max", String.valueOf(max)));
+        if (number >= max) {
+            player.sendMessage(ChatColor.RED + ReanimateMC.lang.get("revive_chain_downed_last",
+                    "minutes", String.valueOf(chain.getWindowMinutes())));
+        }
     }
 
     public boolean isKO(Player player) {

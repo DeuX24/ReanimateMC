@@ -47,7 +47,7 @@ public class ConfigGUI implements Listener {
                 new GuiOption("option_revive_cooldown", 6, OptionType.INTEGER));
         REANIMATION_OPTIONS.put("execution.enabled",
                 new GuiOption("option_execution_enabled", 7, OptionType.BOOLEAN));
-        REANIMATION_OPTIONS.put("execution.hold_duration_ticks",
+        REANIMATION_OPTIONS.put("execution.hits_required",
                 new GuiOption("option_execution_duration", 8, OptionType.INTEGER));
 
         // Knockout (Ligne 2: slots 10-17)
@@ -728,7 +728,8 @@ public class ConfigGUI implements Listener {
         cfg.set("reanimation.cooldown", 60);
         cfg.set("reanimation.revive_cooldown", 60);
         cfg.set("execution.enabled", true);
-        cfg.set("execution.hold_duration_ticks", 40);
+        cfg.set("execution.hits_required", 3);
+        cfg.set("execution.hit_window_seconds", 2.0);
         cfg.set("execution.message_broadcast", true);
 
         cfg.set("knockout.enabled", true);
@@ -736,7 +737,7 @@ public class ConfigGUI implements Listener {
         cfg.set("knockout.movement_disabled", true);
         cfg.set("knockout.use_particles", true);
         cfg.set("knockout.heartbeat_sound", true);
-        cfg.set("knockout.blindness", true);
+        cfg.set("knockout.blindness", false);
         cfg.set("knockout.suicide_hold_seconds", 3);
         cfg.set("knockout.weakness_level", 1);
         cfg.set("knockout.fatigue_level", 1);
