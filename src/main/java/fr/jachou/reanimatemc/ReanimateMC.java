@@ -106,6 +106,7 @@ public final class ReanimateMC extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new PlayerKOListener(koManager), this);
         getServer().getPluginManager().registerEvents(new TotemListener(koManager), this);
         getServer().getPluginManager().registerEvents(new CarryListener(carryManager, koManager), this);
+        getServer().getPluginManager().registerEvents(new SelfReviveItemListener(koManager), this);
         getServer().getPluginManager().registerEvents(new PlayerConnectionListener(koManager), this);
         getServer().getPluginManager().registerEvents(new GolemManager(), this);
 

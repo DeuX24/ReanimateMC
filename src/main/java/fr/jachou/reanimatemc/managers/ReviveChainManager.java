@@ -40,9 +40,17 @@ public class ReviveChainManager {
             return new ItemStack(material, amount);
         }
 
+        /** Item name in the singular, e.g. "golden apple". */
+        public String itemName() {
+            return material == null ? "" : material.name().toLowerCase(Locale.ROOT).replace('_', ' ');
+        }
+
+        /** Readable price, e.g. "free", "1 golden apple", "4 golden apples". */
         public String describe() {
             if (isFree()) return "free";
-            return amount + "x " + material.name().toLowerCase(Locale.ROOT).replace('_', ' ');
+            String name = itemName();
+            if (amount > 1 && !name.endsWith("s")) name = name + "s";
+            return amount + " " + name;
         }
     }
 

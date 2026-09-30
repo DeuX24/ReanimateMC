@@ -101,18 +101,21 @@ public class KOManager {
         AtomicInteger secondsLeft = new AtomicInteger((int) durationSeconds);
         final String countdownKey;
         final String[] countdownArgs;
-        String selfReviveCost = selfReviveHint(player);
+        ReviveChainManager.Cost selfReviveCost = selfReviveHint(player);
         // Shown on the floating label so teammates see what a revive costs before they try.
         final String labelSuffix = reviveCostLabel(player);
         if (selfReviveCost == null) {
             countdownKey = "actionbar_ko_countdown";
             countdownArgs = new String[0];
-        } else if (selfReviveCost.isEmpty()) {
+        } else if (selfReviveCost.material() == null && selfReviveCost.amount() < 0) {
             countdownKey = "actionbar_ko_countdown_no_selfrevive";
+            countdownArgs = new String[0];
+        } else if (selfReviveCost.isFree()) {
+            countdownKey = "actionbar_ko_countdown_selfrevive_free";
             countdownArgs = new String[0];
         } else {
             countdownKey = "actionbar_ko_countdown_selfrevive";
-            countdownArgs = new String[]{"item", selfReviveCost};
+            countdownArgs = new String[]{"item", selfReviveCost.describe(), "itemname", selfReviveCost.itemName()};
         }
 
         // Tâche répétitive pour le countdown
@@ -273,17 +276,17 @@ public class KOManager {
 
     /**
      * The self-revive price shown next to the K.O. countdown: {@code null} when there is
-     * nothing to show (revive chain off, self-revive off or not permitted), an empty string
-     * when self-revive isn't possible for this revive, otherwise the price.
+     * nothing to show (revive chain off, self-revive off or not permitted), a cost with a
+     * negative amount when self-revive isn't possible for this revive, otherwise the price.
      */
-    private String selfReviveHint(Player player) {
+    private ReviveChainManager.Cost selfReviveHint(Player player) {
         ReviveChainManager chain = ReanimateMC.getInstance().getReviveChainManager();
         if (!chain.isEnabled()) return null;
         if (!plugin.getConfig().getBoolean("self_revive.enabled", true)) return null;
         if (!player.hasPermission("reanimatemc.selfrevive")) return null;
         ReviveChainManager.Cost cost = chain.getNextCost(player.getUniqueId(), true);
-        if (cost == null) return "";
-        return cost.describe();
+        if (cost == null) return new ReviveChainManager.Cost(null, -1);
+        return cost;
     }
 
     /** " | Revive: <cost>" for the floating K.O. label, or empty when the revive chain is off. */
