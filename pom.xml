@@ -6,7 +6,7 @@
 
     <groupId>fr.jachou</groupId>
     <artifactId>ReanimateMC</artifactId>
-    <version>1.2.13</version>
+    <version>26.2-1</version>
     <packaging>jar</packaging>
 
     <properties>
